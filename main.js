@@ -75,7 +75,8 @@ function init() {
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
 
-  const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.35, 0.4, 0.85);
+  const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.25, 0.4, 0.9);
+  bloomPass.enabled = bloomToggle.checked;
   composer.addPass(bloomPass);
   renderer.bloomPass = bloomPass;
 
@@ -89,15 +90,15 @@ function init() {
   controls.maxDistance = 10;
   controls.target.set(0, 0, 0);
 
-  // Grid and floor
+  // Grid and floor (light theme)
   const gridSize = 12;
-  gridHelper = new THREE.GridHelper(gridSize, gridSize, 0x334155, 0x1e293b);
+  gridHelper = new THREE.GridHelper(gridSize, gridSize, 0x94a3b8, 0xe2e8f0);
   gridHelper.position.y = -1.2;
   gridHelper.material.transparent = true;
-  gridHelper.material.opacity = 0.35;
+  gridHelper.material.opacity = 0.45;
   scene.add(gridHelper);
 
-  const shadowMat = new THREE.ShadowMaterial({ opacity: 0.15 });
+  const shadowMat = new THREE.ShadowMaterial({ opacity: 0.1 });
   floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), shadowMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -1.2;
