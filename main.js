@@ -6,6 +6,8 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
 import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js';
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import JSZip from 'https://esm.sh/jszip@3.10.1';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
@@ -340,7 +342,6 @@ function fixMaterialTextures(material) {
   srgbMaps.forEach(key => {
     if (material[key] && material[key].isTexture) {
       material[key].colorSpace = THREE.SRGBColorSpace;
-      material[key].needsUpdate = true;
     }
   });
 }
@@ -684,14 +685,6 @@ function applyQuickPreset(name) {
 }
 
 // File loading
-const gltfLoader = new GLTFLoader();
-const objLoader = new OBJLoader();
-const fbxLoader = new FBXLoader();
-const stlLoader = new STLLoader();
-const plyLoader = new PLYLoader();
-const daeLoader = new ColladaLoader();
-const threeMFLoader = new ThreeMFLoader();
-
 const formatNames = {
   glb: 'GLB',
   gltf: 'GLTF',
@@ -703,29 +696,14 @@ const formatNames = {
   '3mf': '3MF'
 };
 
+const modelExtPriority = ['glb', 'gltf', 'obj', 'fbx', 'dae', '3mf', 'stl', 'ply'];
+
 function getExt(filename) {
   return filename.split('.').pop().toLowerCase();
 }
 
-function unsupportedFormat(file) {
-  const ext = getExt(file.name);
-  loaderEl.classList.add('hidden');
-  toast(`${ext.toUpperCase()} formati brauzerda qo‘llab-quvvatlanmaydi. Faylni GLB yoki FBX ga aylantiring.`, 'error');
-}
-
-function createModelGroup(root, format) {
-  const group = new THREE.Group();
-  group.name = fileNameWithoutExt(file.name) || '3D model';
-  group.userData.format = format;
-
-  if (root.isObject3D) {
-    root.traverse(child => {
-      if (child.isMesh || child.isLine || child.isPoints) {
-        group.add(child.clone());
-      }
-    });
-  }
-  return group;
+function getBasename(filename) {
+  return filename.replace(/\\/g, '/').split('/').pop();
 }
 
 function fileNameWithoutExt(name) {
@@ -734,7 +712,7 @@ function fileNameWithoutExt(name) {
   return parts.join('.');
 }
 
-function geometryToGroup(geometry, format) {
+function geometryToGroup(geometry, format, modelFile) {
   const material = new THREE.MeshPhysicalMaterial({
     color: 0x475569,
     roughness: 0.5,
@@ -745,56 +723,173 @@ function geometryToGroup(geometry, format) {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   const group = new THREE.Group();
-  group.name = fileNameWithoutExt(file.name) || '3D model';
+  group.name = fileNameWithoutExt(modelFile.name) || '3D model';
   group.userData.format = format;
   group.add(mesh);
   return group;
 }
 
-function loadFile(file) {
-  const ext = getExt(file.name);
-  const url = URL.createObjectURL(file);
+function normalizePath(p) {
+  return decodeURIComponent(p).toLowerCase().replace(/\\/g, '/').replace(/^\.\/?/, '').replace(/^\//, '');
+}
+
+function createResourceManager(files) {
+  const byPath = new Map();
+  const byName = new Map();
+  const urlCache = new Map();
+
+  files.forEach(file => {
+    const name = file.name || '';
+    const relPath = file.webkitRelativePath || name;
+    byName.set(getBasename(name).toLowerCase(), file);
+    byPath.set(normalizePath(relPath), file);
+    // Also allow matching without top-level folder
+    const segments = normalizePath(relPath).split('/');
+    if (segments.length > 1) {
+      byPath.set(segments.slice(1).join('/'), file);
+    }
+  });
+
+  const manager = new THREE.LoadingManager();
+  manager.setURLModifier((url) => {
+    const clean = normalizePath(url).split('#')[0].split('?')[0];
+    let file = byPath.get(clean) || byName.get(getBasename(clean).toLowerCase());
+    if (!file && clean.includes('/')) {
+      file = byName.get(getBasename(clean).toLowerCase());
+    }
+    if (file) {
+      if (!urlCache.has(file)) urlCache.set(file, URL.createObjectURL(file));
+      return urlCache.get(file);
+    }
+    return url;
+  });
+
+  return { manager, revokeAll: () => { urlCache.forEach(u => URL.revokeObjectURL(u)); urlCache.clear(); } };
+}
+
+function findModelFile(files) {
+  const sorted = [...files].sort((a, b) => {
+    const ai = modelExtPriority.indexOf(getExt(a.name));
+    const bi = modelExtPriority.indexOf(getExt(b.name));
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  });
+  return sorted.find(f => modelExtPriority.includes(getExt(f.name))) || null;
+}
+
+function findFile(files, filename) {
+  const target = getBasename(filename).toLowerCase();
+  return files.find(f => f.name.toLowerCase() === filename.toLowerCase() ||
+    getBasename(f.name).toLowerCase() === target ||
+    normalizePath(f.webkitRelativePath || f.name) === normalizePath(filename));
+}
+
+async function unzipFile(zipFile) {
+  const zip = await JSZip.loadAsync(zipFile);
+  const files = [];
+  await Promise.all(Object.entries(zip.files).map(async ([path, entry]) => {
+    if (entry.dir) return;
+    const blob = await entry.async('blob');
+    const name = getBasename(path);
+    const mime = name.endsWith('.png') ? 'image/png'
+      : name.endsWith('.jpg') || name.endsWith('.jpeg') ? 'image/jpeg'
+      : 'application/octet-stream';
+    const file = new File([blob], name, { type: mime });
+    file._zipPath = path; // preserve nested path for matching
+    files.push(file);
+  }));
+  return files;
+}
+
+async function loadOBJ(objFile, files, manager, onDone, onError) {
+  try {
+    const objText = await objFile.text();
+    const mtllibRegex = /^mtllib\s+(.+)$/gim;
+    const mtllibs = [...objText.matchAll(mtllibRegex)].map(m => m[1].trim());
+
+    let materialCreator = null;
+    if (mtllibs.length) {
+      const mtlFiles = mtllibs.map(name => findFile(files, name)).filter(Boolean);
+      if (mtlFiles.length) {
+        const mtlLoader = new MTLLoader(manager);
+        const mtlTexts = await Promise.all(mtlFiles.map(f => f.text()));
+        materialCreator = mtlLoader.parse(mtlTexts.join('\n'), '');
+        if (materialCreator.preload) materialCreator.preload();
+      }
+    }
+
+    const objLoader = new OBJLoader(manager);
+    if (materialCreator) objLoader.setMaterials(materialCreator);
+    const object = objLoader.parse(objText);
+    onDone(object);
+  } catch (err) {
+    onError(err);
+  }
+}
+
+async function handleFiles(files) {
+  if (files.length === 0) return;
+
+  if (files.length === 1 && getExt(files[0].name) === 'zip') {
+    loaderEl.classList.remove('hidden');
+    try {
+      files = await unzipFile(files[0]);
+      loaderEl.classList.add('hidden');
+    } catch (err) {
+      loaderEl.classList.add('hidden');
+      toast('ZIP arxivni ochib bo‘lmadi: ' + (err?.message || ''), 'error');
+      return;
+    }
+  }
+
+  const modelFile = findModelFile(files);
+  if (!modelFile) {
+    toast('3D model fayli topilmadi. Iltimos, fayllarni yoki ZIP arxivni qayta yuklang.', 'error');
+    return;
+  }
+
+  const ext = getExt(modelFile.name);
+  const { manager } = createResourceManager(files);
+  const modelUrl = URL.createObjectURL(modelFile);
   loaderEl.classList.remove('hidden');
 
-  const onError = (err) => {
-    URL.revokeObjectURL(url);
-    loaderEl.classList.add('hidden');
-    console.error('loadFile error', err);
-    toast('Faylni yuklab bo‘lmadi: ' + (err?.message || 'Noto‘g‘ri format'), 'error');
-  };
-
   const onDone = (group) => {
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(modelUrl);
     setModel(group);
     loaderEl.classList.add('hidden');
     toast(`${formatNames[ext] || ext.toUpperCase()} model yuklandi`, 'success');
   };
 
+  const onError = (err) => {
+    URL.revokeObjectURL(modelUrl);
+    loaderEl.classList.add('hidden');
+    toast('Faylni yuklab bo‘lmadi: ' + (err?.message || 'Noto‘g‘ri format'), 'error');
+  };
+
   if (ext === 'glb' || ext === 'gltf') {
-    gltfLoader.load(url, (gltf) => onDone(gltf.scene), undefined, onError);
+    new GLTFLoader(manager).load(modelUrl, (gltf) => onDone(gltf.scene), undefined, onError);
   } else if (ext === 'obj') {
-    objLoader.load(url, (obj) => onDone(obj), undefined, onError);
+    loadOBJ(modelFile, files, manager, onDone, onError);
   } else if (ext === 'fbx') {
-    fbxLoader.load(url, (fbx) => onDone(fbx), undefined, onError);
+    new FBXLoader(manager).load(modelUrl, (fbx) => onDone(fbx), undefined, onError);
   } else if (ext === 'stl') {
-    stlLoader.load(url, (geometry) => onDone(geometryToGroup(geometry, 'stl')), undefined, onError);
+    new STLLoader(manager).load(modelUrl, (geometry) => onDone(geometryToGroup(geometry, 'stl', modelFile)), undefined, onError);
   } else if (ext === 'ply') {
-    plyLoader.load(url, (geometry) => onDone(geometryToGroup(geometry, 'ply')), undefined, onError);
+    new PLYLoader(manager).load(modelUrl, (geometry) => onDone(geometryToGroup(geometry, 'ply', modelFile)), undefined, onError);
   } else if (ext === 'dae') {
-    daeLoader.load(url, (collada) => onDone(collada.scene), undefined, onError);
+    new ColladaLoader(manager).load(modelUrl, (collada) => onDone(collada.scene), undefined, onError);
   } else if (ext === '3mf') {
-    threeMFLoader.load(url, (obj) => onDone(obj), undefined, onError);
+    new ThreeMFLoader(manager).load(modelUrl, (obj) => onDone(obj), undefined, onError);
   } else {
-    URL.revokeObjectURL(url);
-    unsupportedFormat(file);
+    URL.revokeObjectURL(modelUrl);
+    loaderEl.classList.add('hidden');
+    toast(`${ext.toUpperCase()} formati brauzerda qo‘llab-quvvatlanmaydi. Faylni GLB yoki FBX ga aylantiring.`, 'error');
   }
 }
 
 // UI events
 dropzone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (file) loadFile(file);
+  handleFiles(Array.from(e.target.files));
 });
 
 dropzone.addEventListener('dragover', (e) => {
@@ -807,8 +902,7 @@ dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover
 dropzone.addEventListener('drop', (e) => {
   e.preventDefault();
   dropzone.classList.remove('dragover');
-  const file = e.dataTransfer.files[0];
-  if (file) loadFile(file);
+  handleFiles(Array.from(e.dataTransfer.files));
 });
 
 loadSampleBtn.addEventListener('click', () => {
@@ -860,7 +954,9 @@ takeScreenshotBtn.addEventListener('click', () => {
   const link = document.createElement('a');
   link.href = dataURL;
   link.download = `nex-${Date.now()}.png`;
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
   toast('Skrinshot yuklandi', 'success');
 });
 

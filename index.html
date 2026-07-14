@@ -148,10 +148,10 @@
           <div class="panel-group">
             <h3 class="panel-heading">Mahsulot</h3>
             <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="3D fayl yuklash">
-              <input type="file" id="fileInput" accept=".glb,.gltf,.obj,.fbx,.stl,.ply,.dae,.3mf" hidden>
+              <input type="file" id="fileInput" accept=".zip,.glb,.gltf,.obj,.fbx,.stl,.ply,.dae,.3mf" multiple webkitdirectory directory hidden>
               <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-              <p>3D faylni tashlang</p>
-              <span>GLB · GLTF · OBJ · FBX · STL · PLY · DAE · 3MF</span>
+              <p>3D faylni, fayllar papkasini yoki ZIP arxivni tashlang</p>
+              <span>GLB · GLTF · OBJ · FBX · STL · PLY · DAE · 3MF · ZIP</span>
             </div>
             <button class="btn btn-secondary btn-block" id="loadSample">Namunani tiklash</button>
           </div>
@@ -269,7 +269,7 @@
         <div class="docs-grid">
           <details class="doc-item">
             <summary>Qanday faylni yuklash mumkin?</summary>
-            <p>NEX GLB, GLTF, OBJ, FBX, STL, PLY, DAE va 3MF formatlarini qo‘llab-quvvatlaydi. Faylni drag & drop qilish yoki "Mahsulot" panelidan tanlash kifoya. Agar model teksturalarini o'z ichiga olmasa, ularni material editoridan alohida yuklang.</p>
+            <p>NEX GLB, GLTF, OBJ, FBX, STL, PLY, DAE va 3MF formatlarini qo‘llab-quvvatlaydi. Model bilan birga tekstura/MTL fayllarini ham tanlang, butun papkani tashlang yoki bitta ZIP arxiv yuklang. Agar model ichidagi teksturalar topilmasa, material editoridan alohida yuklang.</p>
           </details>
           <details class="doc-item">
             <summary>Material qanday o‘zgartiriladi?</summary>
