@@ -3,100 +3,299 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NEX — 3D mahsulot vizualizatori</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+  <title>NEX — Professional 3D mahsulot vizualizatori</title>
+  <meta name="description" content="NEX professional darajadagi 3D mahsulot vizualizatori: GLB/GLTF fayllarini yuklang, materiallarni sozlang, skrinshot oling, brendlaringizni realistik ko‘rsating.">
+  <meta name="keywords" content="3D vizualizator, GLB, GLTF, mahsulot configurator, 3D viewer, Uzbekistan, Three.js, web 3D, 3D product viewer">
+  <meta name="robots" content="index, follow">
+  <meta name="author" content="NEX Studio">
+  <link rel="canonical" href="https://github.com/RaximjonRaximov/nex-3d-product-visualizer">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="NEX — Professional 3D mahsulot vizualizatori">
+  <meta property="og:description" content="GLB/GLTF fayllarini brauzerda oching, material va ranglarni sozlang, realistik 3D tajriba yarating.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://github.com/RaximjonRaximov/nex-3d-product-visualizer">
+  <meta property="og:image" content="https://github.com/RaximjonRaximov/nex-3d-product-visualizer/assets/og-cover.png">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="NEX — Professional 3D mahsulot vizualizatori">
+  <meta name="twitter:description" content="GLB/GLTF fayllarini brauzerda oching, material va ranglarni sozlang, realistik 3D tajriba yarating.">
+  <meta name="twitter:image" content="https://github.com/RaximjonRaximov/nex-3d-product-visualizer/assets/og-cover.png">
+
+  <!-- Preconnect -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://unpkg.com">
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+
+  <!-- JSON-LD structured data -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "NEX 3D mahsulot vizualizatori",
+      "description": "GLB va GLTF fayllarini real vaqt rejimida ochib, material, rang va teksturalarni sozlash imkonini beruvchi professional 3D web ilova.",
+      "applicationCategory": "GraphicsApplication",
+      "operatingSystem": "Any",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "NEX Studio"
+      }
+    }
+  </script>
 </head>
 <body>
-  <div class="loader" id="loader">
-    <div class="loader-ring"></div>
-    <p>3D muhit yuklanmoqda...</p>
+  <a href="#app" class="skip-link">Asosiy kontentga o‘tish</a>
+
+  <div class="loader" id="loader" role="status" aria-live="polite">
+    <div class="loader-ring" aria-hidden="true"></div>
+    <p>3D studiya yuklanmoqda...</p>
   </div>
 
-  <header class="header">
-    <a href="#" class="logo">NEX</a>
-    <nav class="nav-links">
-      <a href="https://github.com/RaximjonRaximov/nex-3d-product-visualizer" target="_blank">GitHub</a>
+  <header class="site-header" id="header">
+    <a href="#" class="brand">
+      <span class="brand-mark" aria-hidden="true">NX</span>
+      <span class="brand-name">NEX</span>
+    </a>
+    <nav class="site-nav" id="siteNav" aria-label="Asosiy navigatsiya">
+      <a href="#features">Imkoniyatlar</a>
+      <a href="#app">Vizualizator</a>
+      <a href="#use-cases">Qaerda ishlatiladi</a>
+      <a href="#docs">Qo‘llanma</a>
+      <a href="https://github.com/RaximjonRaximov/nex-3d-product-visualizer" target="_blank" rel="noopener">GitHub</a>
     </nav>
-    <button class="menu-toggle" id="menuToggle" aria-label="Menyu">
+    <a href="#app" class="btn btn-primary btn-small">Vizualizatorni ochish</a>
+    <button class="nav-toggle" id="navToggle" aria-label="Menyuni ochish" aria-expanded="false" aria-controls="siteNav">
       <span></span><span></span><span></span>
     </button>
   </header>
 
-  <main class="app">
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-scroll">
-        <section class="panel">
-          <h3 class="panel-title">Mahsulot</h3>
-          <div class="dropzone" id="dropzone">
-            <input type="file" id="fileInput" accept=".glb,.gltf" hidden>
-            <div class="dropzone-content">
+  <main>
+    <section class="hero" id="hero" aria-label="Bosh sahifa">
+      <div class="hero-bg" aria-hidden="true">
+        <div class="hero-orb"></div>
+        <div class="hero-grid"></div>
+      </div>
+      <div class="hero-content">
+        <span class="eyebrow">Professional 3D tajriba</span>
+        <h1 class="hero-title">Mahsulotingizni <em>jonli</em> ko‘rsating</h1>
+        <p class="hero-lead">
+          NEX — bu brauzerda ishlaydigan 3D mahsulot vizualizatori. GLB va GLTF fayllarini yuklang,
+          material, rang va teksturalarni bir necha soniyada sozlang, mijozlaringizga interaktiv tajriba bering.
+        </p>
+        <div class="hero-actions">
+          <a href="#app" class="btn btn-primary btn-large">Vizualizatorni sinab ko‘rish</a>
+          <a href="#features" class="btn btn-ghost btn-large">Imkoniyatlar</a>
+        </div>
+        <ul class="hero-stats" aria-label="Statistika">
+          <li><strong>60 FPS</strong> silliq animatsiya</li>
+          <li><strong>WebGL 2</strong> zamonaviy grafika</li>
+          <li><strong>GLB/GLTF</strong> keng qamrovli format</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="features" id="features" aria-labelledby="featuresTitle">
+      <div class="container">
+        <header class="section-header">
+          <h2 id="featuresTitle" class="section-title">Nima uchun <span class="accent">NEX?</span></h2>
+          <p class="section-subtitle">Oddiy sahifa emas, balki to‘liq 3D studiya vositasi.</p>
+        </header>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+            <h3>Real vaqt 3D</h3>
+            <p>Brauzerda hech qanday o‘rnatish talab qilmaydi. Yuklaganingizdan so‘ng mahsulot darhol 3D ko‘rinishda paydo bo‘ladi.</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+            <h3>Tez material editori</h3>
+            <p>Har bir materialning rangi, metallik, qoplama, shaffoflik, shisha effekti va teksturasini boshqaring.</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
+            <h3>E-commerce integratsiyasi</h3>
+            <p>Bozorlar va internet-do‘konlar uchun tayyor. Mahsulot ranglari va komplektatsiyalarini bir sahifada ko‘rsating.</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+            <h3>Skrinshot va ulashish</h3>
+            <p>Tayyor ko‘rinishni PNG sifatida yuklab oling va ijtimoiy tarmoqlar yoki prezentatsiyalarda ishlating.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="app-section" id="app" aria-label="3D vizualizator">
+      <div class="app-header">
+        <h2 class="app-title">3D studiya</h2>
+        <p class="app-subtitle">Mahsulot yuklang yoki namunani tahrirlang.</p>
+      </div>
+
+      <div class="app-layout">
+        <aside class="tool-panel" id="toolPanel" aria-label="Boshqaruv paneli">
+          <div class="panel-group">
+            <h3 class="panel-heading">Mahsulot</h3>
+            <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="3D fayl yuklash">
+              <input type="file" id="fileInput" accept=".glb,.gltf" hidden>
               <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-              <p>GLB yoki GLTF faylni bu yerga tashlang</p>
+              <p>GLB/GLTF faylni tashlang</p>
               <span>yoki <strong>tanlash uchun bosing</strong></span>
             </div>
+            <button class="btn btn-secondary btn-block" id="loadSample">Namunani tiklash</button>
           </div>
-          <button class="btn btn-secondary btn-block" id="loadSample">Namunani ko‘rish</button>
-        </section>
 
-        <section class="panel">
-          <h3 class="panel-title">Asosiy sozlamalar</h3>
-          <div class="global-controls">
-            <label class="toggle">
-              <span>Avto aylantirish</span>
-              <input type="checkbox" id="autoRotate" checked>
-              <span class="toggle-switch"></span>
-            </label>
-            <label class="toggle">
-              <span>Qoplamalar ko‘rsatilsin</span>
-              <input type="checkbox" id="showGrid" checked>
-              <span class="toggle-switch"></span>
-            </label>
+          <div class="panel-group">
+            <h3 class="panel-heading">Studiya sozlamalari</h3>
+            <div class="preset-list" id="presetList" role="group" aria-label="Yoritgich presetsi">
+              <button class="preset-btn active" data-env="studio">Studio</button>
+              <button class="preset-btn" data-env="warm">Issiq</button>
+              <button class="preset-btn" data-env="cool">Sovuq</button>
+              <button class="preset-btn" data-env="dark">Tun</button>
+            </div>
+            <div class="toggles">
+              <label class="toggle">
+                <span>Avto aylantirish</span>
+                <input type="checkbox" id="autoRotate" checked>
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+              <label class="toggle">
+                <span>Qoplamalar</span>
+                <input type="checkbox" id="showGrid" checked>
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+              <label class="toggle">
+                <span>Bloom effekti</span>
+                <input type="checkbox" id="bloomToggle" checked>
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+            </div>
           </div>
-        </section>
 
-        <section class="panel" id="materialPanel">
-          <h3 class="panel-title">Material sozlamalari</h3>
-          <div class="material-list" id="materialList">
-            <p class="empty-text">Mahsulot yuklang, materialni sozlash mumkin bo‘ladi.</p>
+          <div class="panel-group" id="materialPanel">
+            <h3 class="panel-heading">Material editori</h3>
+            <div class="material-list" id="materialList">
+              <p class="empty-text">Mahsulot yuklanmoqda...</p>
+            </div>
           </div>
-        </section>
 
-        <section class="panel">
-          <h3 class="panel-title">Harakatlar</h3>
-          <div class="action-grid">
-            <button class="btn btn-icon" id="resetCamera" title="Kamerani tiklash">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5"/></svg>
-              <span>Tiklash</span>
-            </button>
-            <button class="btn btn-icon" id="takeScreenshot" title="Skrinshot">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-              <span>Skrinshot</span>
-            </button>
-            <button class="btn btn-icon" id="toggleFullscreen" title="To‘liq ekran">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-              <span>Ekran</span>
-            </button>
-            <button class="btn btn-icon" id="resetModel" title="Barcha sozlamalarni tiklash">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5"/></svg>
-              <span>Yangilash</span>
-            </button>
+          <div class="panel-group">
+            <h3 class="panel-heading">Tez presetlar</h3>
+            <div class="quick-presets" id="quickPresets">
+              <button data-preset="plastic">Plastik</button>
+              <button data-preset="metal">Metal</button>
+              <button data-preset="glass">Shisha</button>
+              <button data-preset="fabric">Mato</button>
+              <button data-preset="carbon">Karbon</button>
+            </div>
           </div>
-        </section>
+
+          <div class="panel-group">
+            <h3 class="panel-heading">Harakatlar</h3>
+            <div class="action-grid">
+              <button class="action-btn" id="resetCamera" title="Kamerani tiklash">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5"/></svg>
+                <span>Tiklash</span>
+              </button>
+              <button class="action-btn" id="takeScreenshot" title="Skrinshot">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                <span>Skrinshot</span>
+              </button>
+              <button class="action-btn" id="toggleFullscreen" title="To‘liq ekran">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                <span>Ekran</span>
+              </button>
+              <button class="action-btn" id="resetModel" title="Barcha sozlamalarni tiklash">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5"/></svg>
+                <span>Yangilash</span>
+              </button>
+            </div>
+            <div class="model-stats" id="modelStats" aria-live="polite"></div>
+          </div>
+        </aside>
+
+        <div class="viewport" id="viewport" role="img" aria-label="3D mahsulot ko‘rinishi">
+          <canvas id="webgl"></canvas>
+          <div class="viewport-hint">
+            <span>Mouse bilan aylantirish · Scroll bilan yaqinlashtirish</span>
+          </div>
+          <div class="viewport-badge" id="viewportBadge">Studio</div>
+        </div>
       </div>
-    </aside>
+    </section>
 
-    <div class="canvas-wrapper" id="canvasWrapper">
-      <canvas id="webgl"></canvas>
-      <div class="canvas-hint" id="canvasHint">
-        <span>Mouse bilan aylantiring, scroll bilan yaqinlashtiring</span>
+    <section class="use-cases" id="use-cases" aria-labelledby="useCasesTitle">
+      <div class="container">
+        <header class="section-header">
+          <h2 id="useCasesTitle" class="section-title">Qaerda <span class="accent">ishlatiladi?</span></h2>
+        </header>
+        <div class="case-grid">
+          <article class="case-card">
+            <h3>E-commerce</h3>
+            <p>Mijozlar mahsulotni 360 daraja aylanib, rang va komplektatsiyalarni tanlashlari mumkin. Sotuvlar oshadi va qaytarishlar kamayadi.</p>
+          </article>
+          <article class="case-card">
+            <h3>Arxitektura va interyer</h3>
+            <p>Mebel, chiroqlar va dekorlarni 3D ko‘rinishda joylashtiring. Interyer loyihalarini jonli namoyish eting.</p>
+          </article>
+          <article class="case-card">
+            <h3>Ishlab chiqarish</h3>
+            <p>Detallar va qurilmalarni texnik ko‘rinishda ko‘rsating. Xodimlar va mijozlar bir xil vizual tilni tushunadi.</p>
+          </article>
+          <article class="case-card">
+            <h3>Ta’lim va trening</h3>
+            <p>Murakkab ob‘ektlarni demontaj qilib, har bir qismini alohida ko‘rib, o‘qitish jarayonini yaxshilang.</p>
+          </article>
+        </div>
       </div>
-    </div>
+    </section>
+
+    <section class="docs" id="docs" aria-labelledby="docsTitle">
+      <div class="container">
+        <header class="section-header">
+          <h2 id="docsTitle" class="section-title">Qo‘llanma</h2>
+        </header>
+        <div class="docs-grid">
+          <details class="doc-item">
+            <summary>Qanday faylni yuklash mumkin?</summary>
+            <p>NEX GLB va GLTF formatlarini qo‘llab-quvvatlaydi. Faylni drag & drop qilish yoki "Mahsulot" panelidan tanlash kifoya.</p>
+          </details>
+          <details class="doc-item">
+            <summary>Material qanday o‘zgartiriladi?</summary>
+            <p>Mahsulot yuklangach, chap panelda har bir material uchun rang, metallik, qoplama, shaffoflik va boshqa xususiyatlar paydo bo‘ladi.</p>
+          </details>
+          <details class="doc-item">
+            <summary>Skrinshot qandali olinadi?</summary>
+            <p>"Skrinshot" tugmasi bosilganda joriy 3D ko‘rinish PNG sifatida brauzerga yuklanadi.</p>
+          </details>
+          <details class="doc-item">
+            <summary>Mobil qurilmada ishlaydimi?</summary>
+            <p>Ha, NEX sensor ekranlar va har xil o‘lchamdagi ekranlar uchun optimallashtirilgan.</p>
+          </details>
+        </div>
+      </div>
+    </section>
   </main>
 
-  <div class="toast-container" id="toastContainer"></div>
+  <footer class="site-footer">
+    <div class="container">
+      <p>© 2026 NEX Studio. Barcha huquqlar himoyalangan.</p>
+      <p class="footer-note">GLB/GLTF vizualizatsiya, material editori va skrinshot — barchasi brauzerda.</p>
+    </div>
+  </footer>
+
+  <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
   <script type="importmap">
     {

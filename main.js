@@ -2,179 +2,278 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
+// DOM refs
 const canvas = document.getElementById('webgl');
 const loaderEl = document.getElementById('loader');
 const materialList = document.getElementById('materialList');
+const materialPanel = document.getElementById('materialPanel');
 const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
 const loadSampleBtn = document.getElementById('loadSample');
 const autoRotateToggle = document.getElementById('autoRotate');
 const showGridToggle = document.getElementById('showGrid');
+const bloomToggle = document.getElementById('bloomToggle');
+const presetList = document.getElementById('presetList');
+const quickPresets = document.getElementById('quickPresets');
 const resetCameraBtn = document.getElementById('resetCamera');
 const takeScreenshotBtn = document.getElementById('takeScreenshot');
 const toggleFullscreenBtn = document.getElementById('toggleFullscreen');
 const resetModelBtn = document.getElementById('resetModel');
-const menuToggle = document.getElementById('menuToggle');
-const sidebar = document.getElementById('sidebar');
+const viewportBadge = document.getElementById('viewportBadge');
+const modelStats = document.getElementById('modelStats');
+const navToggle = document.getElementById('navToggle');
+const siteNav = document.getElementById('siteNav');
 const toastContainer = document.getElementById('toastContainer');
 
-let scene, camera, renderer, controls, gridHelper, shadowPlane;
+let scene, camera, renderer, composer, controls, gridHelper, floor;
 let currentModel = null;
 let materials = [];
+let selectedMaterialIndex = 0;
 let animationId;
+let envMap;
 
-// Scene setup
-scene = new THREE.Scene();
-scene.background = null;
+// Lighting references
+let ambient, dirLight, fillLight, rimLight, rectLightKey, rectLightFill;
 
-camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
-camera.position.set(4, 2.5, 5.5);
+// Init
+function init() {
+  scene = new THREE.Scene();
+  scene.background = null;
 
-renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const viewport = document.getElementById('viewport');
+  const width = viewport.clientWidth;
+  const height = viewport.clientHeight;
 
-// Environment
-const pmremGenerator = new THREE.PMREMGenerator(renderer);
-scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+  camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+  camera.position.set(3.2, 2.0, 4.5);
 
-// Lights
-const ambient = new THREE.AmbientLight(0xffffff, 1.2);
-scene.add(ambient);
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-dirLight.position.set(5, 8, 5);
-dirLight.castShadow = true;
-dirLight.shadow.mapSize.set(1024, 1024);
-dirLight.shadow.bias = -0.0001;
-scene.add(dirLight);
+  // Environment
+  const pmremGenerator = new THREE.PMREMGenerator(renderer);
+  envMap = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = envMap;
 
-const fillLight = new THREE.PointLight(0x38bdf8, 0.8);
-fillLight.position.set(-4, 2, -4);
-scene.add(fillLight);
+  // RectAreaLight init
+  RectAreaLightUniformsLib.init();
 
-const rimLight = new THREE.PointLight(0xf59e0b, 0.6);
-rimLight.position.set(4, 3, -2);
-scene.add(rimLight);
+  setupLights('studio');
 
-// Floor / grid
-const gridSize = 20;
-gridHelper = new THREE.GridHelper(gridSize, gridSize, 0xcbd5e1, 0xe2e8f0);
-gridHelper.position.y = -1.55;
-gridHelper.material.transparent = true;
-gridHelper.material.opacity = 0.5;
-scene.add(gridHelper);
+  // Post-processing
+  composer = new EffectComposer(renderer);
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
 
-const shadowMat = new THREE.ShadowMaterial({ opacity: 0.12 });
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), shadowMat);
-floor.rotation.x = -Math.PI / 2;
-floor.position.y = -1.55;
-floor.receiveShadow = true;
-scene.add(floor);
+  const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.35, 0.4, 0.85);
+  composer.addPass(bloomPass);
+  renderer.bloomPass = bloomPass;
 
-// Controls
-controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true;
-controls.dampingFactor = 0.05;
-controls.autoRotate = true;
-controls.autoRotateSpeed = 1.2;
-controls.minDistance = 2;
-controls.maxDistance = 12;
-controls.target.set(0, 0.2, 0);
+  // Controls
+  controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 1.2;
+  controls.minDistance = 2;
+  controls.maxDistance = 10;
+  controls.target.set(0, 0, 0);
 
-// Default product model
+  // Grid and floor
+  const gridSize = 12;
+  gridHelper = new THREE.GridHelper(gridSize, gridSize, 0x334155, 0x1e293b);
+  gridHelper.position.y = -1.2;
+  gridHelper.material.transparent = true;
+  gridHelper.material.opacity = 0.35;
+  scene.add(gridHelper);
+
+  const shadowMat = new THREE.ShadowMaterial({ opacity: 0.15 });
+  floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), shadowMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = -1.2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  setModel(createDefaultModel());
+
+  animate();
+  loaderEl.classList.add('hidden');
+  updateViewportBadge('Studio');
+}
+
+function setupLights(preset) {
+  // Remove old
+  if (ambient) scene.remove(ambient);
+  if (dirLight) scene.remove(dirLight);
+  if (fillLight) scene.remove(fillLight);
+  if (rimLight) scene.remove(rimLight);
+  if (rectLightKey) scene.remove(rectLightKey);
+  if (rectLightFill) scene.remove(rectLightFill);
+
+  const settings = {
+    studio: { ambient: 1.0, exposure: 1.0, dirColor: 0xffffff, dirInt: 1.3, fillColor: 0x38bdf8, fillInt: 0.5, rimColor: 0xf59e0b, rimInt: 0.4, bloom: 0.35 },
+    warm: { ambient: 0.85, exposure: 1.05, dirColor: 0xffedd5, dirInt: 1.2, fillColor: 0xf97316, fillInt: 0.45, rimColor: 0xf59e0b, rimInt: 0.55, bloom: 0.4 },
+    cool: { ambient: 1.0, exposure: 1.0, dirColor: 0xe0f2fe, dirInt: 1.3, fillColor: 0x60a5fa, fillInt: 0.5, rimColor: 0x22d3ee, rimInt: 0.45, bloom: 0.3 },
+    dark: { ambient: 0.35, exposure: 1.15, dirColor: 0x94a3b8, dirInt: 0.8, fillColor: 0x1e293b, fillInt: 0.3, rimColor: 0xf59e0b, rimInt: 0.8, bloom: 0.55 }
+  }[preset] || settings.studio;
+
+  renderer.toneMappingExposure = settings.exposure;
+  if (composer && renderer.bloomPass) renderer.bloomPass.strength = settings.bloom;
+
+  ambient = new THREE.AmbientLight(settings.dirColor, settings.ambient);
+  scene.add(ambient);
+
+  dirLight = new THREE.DirectionalLight(settings.dirColor, settings.dirInt);
+  dirLight.position.set(4, 6, 4);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(2048, 2048);
+  dirLight.shadow.bias = -0.0001;
+  scene.add(dirLight);
+
+  fillLight = new THREE.PointLight(settings.fillColor, settings.fillInt);
+  fillLight.position.set(-3, 2, -3);
+  scene.add(fillLight);
+
+  rimLight = new THREE.PointLight(settings.rimColor, settings.rimInt);
+  rimLight.position.set(3, 3, -3);
+  scene.add(rimLight);
+
+  // Rect area strip lights for soft reflections
+  rectLightKey = new THREE.RectAreaLight(settings.dirColor, 1.2, 3, 1);
+  rectLightKey.position.set(0, 3, 3);
+  rectLightKey.lookAt(0, 0, 0);
+  scene.add(rectLightKey);
+
+  rectLightFill = new THREE.RectAreaLight(settings.fillColor, 0.6, 2, 2);
+  rectLightFill.position.set(-3, 1, 0);
+  rectLightFill.lookAt(0, 0, 0);
+  scene.add(rectLightFill);
+}
+
 function createDefaultModel() {
   const group = new THREE.Group();
-  group.name = 'NEX Speaker';
+  group.name = 'NEX Watch';
 
-  const bodyMat = new THREE.MeshPhysicalMaterial({
-    color: 0xf8fafc,
-    roughness: 0.35,
-    metalness: 0.1,
-    clearcoat: 0.2,
-    name: 'Korpus'
-  });
-
-  const grilleMat = new THREE.MeshPhysicalMaterial({
-    color: 0x1e293b,
-    roughness: 0.85,
-    metalness: 0.05,
-    name: 'Ustki panjara'
-  });
-
-  const ringMat = new THREE.MeshPhysicalMaterial({
-    color: 0x94a3b8,
-    roughness: 0.15,
+  const caseMat = new THREE.MeshPhysicalMaterial({
+    color: 0xd1d5db,
+    roughness: 0.25,
     metalness: 0.9,
-    clearcoat: 0.8,
-    name: 'Metall halqa'
+    clearcoat: 0.6,
+    name: 'Metall korpus'
   });
 
-  const baseMat = new THREE.MeshPhysicalMaterial({
-    color: 0xffffff,
-    roughness: 0.05,
+  const bezelMat = new THREE.MeshPhysicalMaterial({
+    color: 0xf59e0b,
+    roughness: 0.12,
+    metalness: 1.0,
+    clearcoat: 0.85,
+    name: 'Bezel'
+  });
+
+  const screenMat = new THREE.MeshPhysicalMaterial({
+    color: 0x050505,
+    roughness: 0.04,
+    metalness: 0.3,
+    clearcoat: 1.0,
+    emissive: 0x0f172a,
+    emissiveIntensity: 0.6,
+    name: 'Ekran'
+  });
+
+  const strapMat = new THREE.MeshPhysicalMaterial({
+    color: 0x1f2937,
+    roughness: 0.85,
     metalness: 0.0,
-    transmission: 0.6,
-    thickness: 1.2,
-    transparent: true,
-    opacity: 0.9,
-    name: 'Akril taglik'
+    name: 'Remen'
+  });
+
+  const crownMat = new THREE.MeshPhysicalMaterial({
+    color: 0xf59e0b,
+    roughness: 0.18,
+    metalness: 0.95,
+    name: 'Crown'
   });
 
   const buttonMat = new THREE.MeshPhysicalMaterial({
-    color: 0x4f46e5,
+    color: 0x374151,
     roughness: 0.3,
-    metalness: 0.1,
-    emissive: 0x4f46e5,
-    emissiveIntensity: 0.2,
+    metalness: 0.6,
     name: 'Tugmalar'
   });
 
-  // Body
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.95, 2.2, 64), bodyMat);
-  body.position.y = 0.2;
-  body.castShadow = true;
-  body.receiveShadow = true;
-  group.add(body);
+  // Case
+  const caseMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.18, 64), caseMat);
+  caseMesh.rotation.x = Math.PI / 2;
+  caseMesh.castShadow = true;
+  caseMesh.receiveShadow = true;
+  group.add(caseMesh);
 
-  // Top grille
-  const grille = new THREE.Mesh(new THREE.CylinderGeometry(0.82, 0.82, 0.15, 64), grilleMat);
-  grille.position.y = 1.35;
-  grille.castShadow = true;
-  group.add(grille);
+  // Screen
+  const screenMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.025, 64), screenMat);
+  screenMesh.rotation.x = Math.PI / 2;
+  screenMesh.position.z = 0.11;
+  group.add(screenMesh);
 
-  // Ring
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.96, 0.04, 16, 100), ringMat);
-  ring.rotation.x = Math.PI / 2;
-  ring.position.y = -0.65;
-  ring.castShadow = true;
-  group.add(ring);
+  // Bezel ring
+  const bezelMesh = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.045, 16, 120), bezelMat);
+  bezelMesh.position.z = 0.01;
+  bezelMesh.castShadow = true;
+  group.add(bezelMesh);
 
-  // Acrylic base
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.15, 0.25, 64), baseMat);
-  base.position.y = -1.42;
-  base.castShadow = true;
-  base.receiveShadow = true;
-  group.add(base);
+  // Lugs
+  const lugGeo = new THREE.BoxGeometry(0.35, 0.42, 0.1);
+  const lugTop = new THREE.Mesh(lugGeo, caseMat);
+  lugTop.position.set(0, 0.78, -0.06);
+  lugTop.rotation.x = Math.PI / 14;
+  lugTop.castShadow = true;
+  group.add(lugTop);
+
+  const lugBottom = new THREE.Mesh(lugGeo, caseMat);
+  lugBottom.position.set(0, -0.78, -0.06);
+  lugBottom.rotation.x = -Math.PI / 14;
+  lugBottom.castShadow = true;
+  group.add(lugBottom);
+
+  // Strap
+  const strapGeo = new THREE.CapsuleGeometry(0.18, 1.1, 4, 20);
+  const strapTop = new THREE.Mesh(strapGeo, strapMat);
+  strapTop.position.set(0, 1.45, -0.12);
+  strapTop.scale.set(1.35, 1, 0.7);
+  strapTop.castShadow = true;
+  group.add(strapTop);
+
+  const strapBottom = strapTop.clone();
+  strapBottom.position.set(0, -1.45, -0.12);
+  group.add(strapBottom);
+
+  // Crown
+  const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.14, 32), crownMat);
+  crown.rotation.z = Math.PI / 2;
+  crown.position.set(0.64, 0.12, 0);
+  crown.castShadow = true;
+  group.add(crown);
 
   // Buttons
-  const btnGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.05, 32);
+  const btnGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.09, 32);
   const btn1 = new THREE.Mesh(btnGeo, buttonMat);
-  btn1.position.set(0, 1.43, 0.5);
+  btn1.rotation.z = Math.PI / 2;
+  btn1.position.set(0.64, -0.14, 0);
   group.add(btn1);
 
   const btn2 = new THREE.Mesh(btnGeo, buttonMat);
-  btn2.position.set(0.25, 1.43, 0.42);
+  btn2.rotation.z = Math.PI / 2;
+  btn2.position.set(0.64, -0.32, 0);
   group.add(btn2);
-
-  const btn3 = new THREE.Mesh(btnGeo, buttonMat);
-  btn3.position.set(-0.25, 1.43, 0.42);
-  group.add(btn3);
 
   return group;
 }
@@ -187,6 +286,53 @@ function upgradeToPhysical(material) {
   return physical;
 }
 
+function setModel(model) {
+  if (currentModel) {
+    scene.remove(currentModel);
+    disposeModel(currentModel);
+  }
+
+  currentModel = model;
+  scene.add(model);
+
+  // Center and scale
+  const box = new THREE.Box3().setFromObject(model);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const scale = 2.2 / maxDim;
+  model.scale.setScalar(scale);
+  model.position.sub(center.clone().multiplyScalar(scale));
+  model.position.y += 0.1;
+
+  // Floor alignment
+  const bottom = box.min.y * scale + model.position.y;
+  gridHelper.position.y = bottom - 0.05;
+  floor.position.y = bottom - 0.05;
+
+  collectMaterials(model);
+  selectedMaterialIndex = 0;
+  buildMaterialList();
+  updateModelStats(model);
+  toast('Mahsulot yuklandi: ' + (model.name || '3D model'), 'success');
+}
+
+function disposeModel(model) {
+  model.traverse(child => {
+    if (child.isMesh) {
+      child.geometry?.dispose();
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      mats.forEach(m => {
+        if (!m) return;
+        Object.values(m).forEach(v => {
+          if (v && typeof v.dispose === 'function') v.dispose();
+        });
+        if (m.dispose) m.dispose();
+      });
+    }
+  });
+}
+
 function collectMaterials(model) {
   const materialMap = new Map();
   materials = [];
@@ -195,6 +341,7 @@ function collectMaterials(model) {
     if (child.isMesh && child.material) {
       const mats = Array.isArray(child.material) ? child.material : [child.material];
       const newMats = mats.map(mat => {
+        if (!mat) return mat;
         if (!materialMap.has(mat)) {
           const physical = upgradeToPhysical(mat);
           materialMap.set(mat, physical);
@@ -207,62 +354,52 @@ function collectMaterials(model) {
       child.receiveShadow = true;
     }
   });
-
-  return materials;
 }
 
-function setModel(model) {
-  if (currentModel) {
-    scene.remove(currentModel);
-    // Dispose old materials and geometries to avoid leaks
-    currentModel.traverse(child => {
-      if (child.isMesh) {
-        child.geometry?.dispose();
-        const mats = Array.isArray(child.material) ? child.material : [child.material];
-        mats.forEach(m => {
-          Object.values(m).forEach(v => {
-            if (v && v.dispose) v.dispose();
-          });
-        });
+function updateModelStats(model) {
+  let meshCount = 0, vertexCount = 0, triangleCount = 0;
+  model.traverse(child => {
+    if (child.isMesh && child.geometry) {
+      meshCount++;
+      const pos = child.geometry.attributes.position;
+      if (pos) vertexCount += pos.count;
+      if (child.geometry.index) {
+        triangleCount += child.geometry.index.count / 3;
+      } else {
+        triangleCount += pos.count / 3;
       }
-    });
-  }
+    }
+  });
 
-  currentModel = model;
-  scene.add(model);
-
-  // Center model
-  const box = new THREE.Box3().setFromObject(model);
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z);
-  const scale = 2.5 / maxDim;
-  model.scale.setScalar(scale);
-
-  model.position.sub(center.clone().multiplyScalar(scale));
-  model.position.y += 0.2;
-
-  // Adjust grid floor
-  const bottom = box.min.y * scale + model.position.y;
-  gridHelper.position.y = bottom - 0.05;
-  floor.position.y = bottom - 0.05;
-
-  collectMaterials(model);
-  buildMaterialList();
-  toast('Mahsulot yuklandi. Materialni sozlash mumkin.', 'success');
+  modelStats.innerHTML = `
+    <span><strong>Meshlar:</strong> ${meshCount}</span>
+    <span><strong>Vertexlar:</strong> ${vertexCount.toLocaleString()}</span>
+    <span><strong>Uchburchaklar:</strong> ${Math.floor(triangleCount).toLocaleString()}</span>
+    <span><strong>Material:</strong> ${materials.length}</span>
+  `;
 }
 
 function buildMaterialList() {
   materialList.innerHTML = '';
 
   if (materials.length === 0) {
-    materialList.innerHTML = '<p class="empty-text">Mahsulot yuklang, materialni sozlash mumkin bo‘ladi.</p>';
+    materialList.innerHTML = '<p class="empty-text">Material topilmadi.</p>';
     return;
   }
 
   materials.forEach((material, index) => {
     const card = document.createElement('div');
-    card.className = 'material-card';
+    card.className = `material-card ${index === selectedMaterialIndex ? 'selected' : ''}`;
+    card.dataset.index = index;
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-pressed', index === selectedMaterialIndex ? 'true' : 'false');
+    card.setAttribute('aria-label', `Material ${material.name || index + 1}ni tanlash`);
+
+    card.addEventListener('click', () => selectMaterial(index));
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') selectMaterial(index);
+    });
 
     const header = document.createElement('div');
     header.className = 'material-header';
@@ -273,57 +410,38 @@ function buildMaterialList() {
 
     const preview = document.createElement('div');
     preview.className = 'material-preview';
+    preview.id = `mat-preview-${index}`;
     preview.style.backgroundColor = '#' + material.color.getHexString();
 
     header.appendChild(name);
     header.appendChild(preview);
     card.appendChild(header);
 
-    const row1 = document.createElement('div');
-    row1.className = 'control-row';
+    const controls = document.createElement('div');
+    controls.className = 'material-controls';
 
-    row1.appendChild(createControlGroup('Rang', 'color', material.color.getHexString(), (val) => {
-      material.color.set(val);
-      preview.style.backgroundColor = val;
-    }));
+    controls.appendChild(createControlRow(
+      createColorControl('Rang', material.color, (c) => {
+        material.color.set(c);
+        preview.style.backgroundColor = c;
+      }),
+      createRangeControl('Shaffoflik', 0, 1, 0.01, material.opacity, (v) => {
+        material.opacity = v;
+        material.transparent = v < 1;
+        material.needsUpdate = true;
+      })
+    ));
 
-    row1.appendChild(createControlGroup('Shaffoflik', 'range', material.opacity, (val) => {
-      material.opacity = parseFloat(val);
-      material.transparent = material.opacity < 1;
-      material.needsUpdate = true;
-    }, { min: 0, max: 1, step: 0.01 }));
+    controls.appendChild(createControlRow(
+      createRangeControl('Metallik', 0, 1, 0.01, material.metalness, (v) => { material.metalness = v; }),
+      createRangeControl('Qoplama', 0, 1, 0.01, material.roughness, (v) => { material.roughness = v; })
+    ));
 
-    card.appendChild(row1);
+    controls.appendChild(createControlRow(
+      createRangeControl('Shisha effekti', 0, 1, 0.01, material.transmission || 0, (v) => { material.transmission = v; material.needsUpdate = true; }),
+      createRangeControl('Ustki yorqinlik', 0, 1, 0.01, material.clearcoat || 0, (v) => { material.clearcoat = v; material.needsUpdate = true; })
+    ));
 
-    const row2 = document.createElement('div');
-    row2.className = 'control-row';
-
-    row2.appendChild(createControlGroup('Metallik', 'range', material.metalness, (val) => {
-      material.metalness = parseFloat(val);
-    }, { min: 0, max: 1, step: 0.01 }));
-
-    row2.appendChild(createControlGroup('Qoplama', 'range', material.roughness, (val) => {
-      material.roughness = parseFloat(val);
-    }, { min: 0, max: 1, step: 0.01 }));
-
-    card.appendChild(row2);
-
-    const row3 = document.createElement('div');
-    row3.className = 'control-row';
-
-    row3.appendChild(createControlGroup('Shisha effekti', 'range', material.transmission || 0, (val) => {
-      material.transmission = parseFloat(val);
-      material.needsUpdate = true;
-    }, { min: 0, max: 1, step: 0.01 }));
-
-    row3.appendChild(createControlGroup('Ustki yorqinlik', 'range', material.clearcoat || 0, (val) => {
-      material.clearcoat = parseFloat(val);
-      material.needsUpdate = true;
-    }, { min: 0, max: 1, step: 0.01 }));
-
-    card.appendChild(row3);
-
-    // Texture upload
     const textureRow = document.createElement('div');
     textureRow.className = 'texture-row';
 
@@ -341,6 +459,7 @@ function buildMaterialList() {
     removeBtn.className = 'texture-remove';
     removeBtn.textContent = 'O‘chirish';
     if (material.map) removeBtn.classList.add('visible');
+    removeBtn.setAttribute('aria-label', 'Teksturani olib tashlash');
 
     textureInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
@@ -359,7 +478,8 @@ function buildMaterialList() {
       });
     });
 
-    removeBtn.addEventListener('click', () => {
+    removeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (material.map) {
         material.map.dispose();
         material.map = null;
@@ -374,13 +494,28 @@ function buildMaterialList() {
     textureRow.appendChild(textureInput);
     textureRow.appendChild(textureLabel);
     textureRow.appendChild(removeBtn);
-    card.appendChild(textureRow);
+    controls.appendChild(textureRow);
 
+    card.appendChild(controls);
     materialList.appendChild(card);
   });
+
+  // Store reference to preview elements for quick presets
+  materialList._previews = materials.map((m, i) => ({
+    material: m,
+    preview: document.getElementById(`mat-preview-${i}`)
+  }));
 }
 
-function createControlGroup(label, type, value, onChange, opts = {}) {
+function createControlRow(left, right) {
+  const row = document.createElement('div');
+  row.className = 'control-row';
+  row.appendChild(left);
+  row.appendChild(right);
+  return row;
+}
+
+function createColorControl(label, colorObj, onChange) {
   const group = document.createElement('div');
   group.className = 'control-group';
 
@@ -388,16 +523,8 @@ function createControlGroup(label, type, value, onChange, opts = {}) {
   labelEl.textContent = label;
 
   const input = document.createElement('input');
-  input.type = type;
-  if (type === 'range') {
-    input.min = opts.min ?? 0;
-    input.max = opts.max ?? 1;
-    input.step = opts.step ?? 0.01;
-    input.value = value;
-  } else if (type === 'color') {
-    input.value = value;
-  }
-
+  input.type = 'color';
+  input.value = '#' + colorObj.getHexString();
   input.addEventListener('input', (e) => onChange(e.target.value));
 
   group.appendChild(labelEl);
@@ -405,13 +532,71 @@ function createControlGroup(label, type, value, onChange, opts = {}) {
   return group;
 }
 
+function createRangeControl(label, min, max, step, value, onChange) {
+  const group = document.createElement('div');
+  group.className = 'control-group';
+
+  const labelEl = document.createElement('label');
+  labelEl.textContent = label;
+
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.min = min;
+  input.max = max;
+  input.step = step;
+  input.value = value;
+  input.addEventListener('input', (e) => onChange(parseFloat(e.target.value)));
+
+  group.appendChild(labelEl);
+  group.appendChild(input);
+  return group;
+}
+
+function selectMaterial(index) {
+  selectedMaterialIndex = index;
+  document.querySelectorAll('.material-card').forEach((card, i) => {
+    card.classList.toggle('selected', i === index);
+    card.setAttribute('aria-pressed', i === index ? 'true' : 'false');
+  });
+}
+
+function applyQuickPreset(name) {
+  const material = materials[selectedMaterialIndex];
+  if (!material) {
+    toast('Avval material tanlang', 'error');
+    return;
+  }
+
+  const presets = {
+    plastic: { color: 0xffffff, roughness: 0.6, metalness: 0, transmission: 0, clearcoat: 0.1, transparent: false, opacity: 1 },
+    metal: { color: 0xc0c0c0, roughness: 0.15, metalness: 1, transmission: 0, clearcoat: 0.7, transparent: false, opacity: 1 },
+    glass: { color: 0xa5f3fc, roughness: 0.05, metalness: 0, transmission: 0.9, clearcoat: 1, transparent: true, opacity: 0.85 },
+    fabric: { color: 0x334155, roughness: 0.95, metalness: 0, transmission: 0, clearcoat: 0, transparent: false, opacity: 1 },
+    carbon: { color: 0x111827, roughness: 0.35, metalness: 0.15, transmission: 0, clearcoat: 0.6, transparent: false, opacity: 1 }
+  };
+
+  const p = presets[name];
+  if (!p) return;
+
+  material.color.setHex(p.color);
+  material.roughness = p.roughness;
+  material.metalness = p.metalness;
+  material.transmission = p.transmission;
+  material.clearcoat = p.clearcoat;
+  material.opacity = p.opacity;
+  material.transparent = p.transparent;
+  material.needsUpdate = true;
+
+  // Rebuild UI to reflect changes
+  buildMaterialList();
+  toast(`${name[0].toUpperCase() + name.slice(1)} preset qo‘llandi`, 'success');
+}
+
 // File loading
 const gltfLoader = new GLTFLoader();
 
 function loadFile(file) {
   const url = URL.createObjectURL(file);
-  const isGltf = file.name.toLowerCase().endsWith('.gltf');
-
   loaderEl.classList.remove('hidden');
 
   gltfLoader.load(url, (gltf) => {
@@ -437,9 +622,7 @@ dropzone.addEventListener('dragover', (e) => {
   dropzone.classList.add('dragover');
 });
 
-dropzone.addEventListener('dragleave', () => {
-  dropzone.classList.remove('dragover');
-});
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
 
 dropzone.addEventListener('drop', (e) => {
   e.preventDefault();
@@ -456,28 +639,47 @@ loadSampleBtn.addEventListener('click', () => {
   }, 300);
 });
 
-autoRotateToggle.addEventListener('change', (e) => {
-  controls.autoRotate = e.target.checked;
-});
-
+autoRotateToggle.addEventListener('change', (e) => { controls.autoRotate = e.target.checked; });
 showGridToggle.addEventListener('change', (e) => {
   gridHelper.visible = e.target.checked;
   floor.visible = e.target.checked;
 });
+bloomToggle.addEventListener('change', (e) => {
+  if (renderer.bloomPass) {
+    renderer.bloomPass.enabled = e.target.checked;
+  }
+});
+
+presetList.addEventListener('click', (e) => {
+  const btn = e.target.closest('.preset-btn');
+  if (!btn) return;
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const env = btn.dataset.env;
+  setupLights(env);
+  updateViewportBadge(env === 'studio' ? 'Studio' : env === 'warm' ? 'Issiq' : env === 'cool' ? 'Sovuq' : 'Tun');
+  toast('Yoritgich presetsi o‘zgartirildi', 'info');
+});
+
+quickPresets.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  applyQuickPreset(btn.dataset.preset);
+});
 
 resetCameraBtn.addEventListener('click', () => {
   controls.reset();
-  camera.position.set(4, 2.5, 5.5);
-  controls.target.set(0, 0.2, 0);
+  camera.position.set(3.2, 2.0, 4.5);
+  controls.target.set(0, 0, 0);
   toast('Kamera tiklandi', 'info');
 });
 
 takeScreenshotBtn.addEventListener('click', () => {
-  renderer.render(scene, camera);
+  composer.render();
   const dataURL = renderer.domElement.toDataURL('image/png');
   const link = document.createElement('a');
   link.href = dataURL;
-  link.download = `nex-screenshot-${Date.now()}.png`;
+  link.download = `nex-${Date.now()}.png`;
   link.click();
   toast('Skrinshot yuklandi', 'success');
 });
@@ -495,9 +697,24 @@ resetModelBtn.addEventListener('click', () => {
   loadSampleBtn.click();
 });
 
-menuToggle.addEventListener('click', () => {
-  sidebar.classList.toggle('open');
+navToggle.addEventListener('click', () => {
+  const open = !siteNav.classList.toggle('open');
+  navToggle.classList.toggle('active', siteNav.classList.contains('open'));
+  navToggle.setAttribute('aria-expanded', siteNav.classList.contains('open'));
 });
+
+siteNav.querySelectorAll('a').forEach(a => {
+  a.addEventListener('click', () => {
+    siteNav.classList.remove('open');
+    navToggle.classList.remove('active');
+    navToggle.setAttribute('aria-expanded', 'false');
+  });
+});
+
+// Viewport badge
+function updateViewportBadge(text) {
+  viewportBadge.textContent = text;
+}
 
 // Toast
 function toast(message, type = 'info') {
@@ -509,37 +726,26 @@ function toast(message, type = 'info') {
     el.style.opacity = '0';
     el.style.transform = 'translateX(20px)';
     setTimeout(() => el.remove(), 300);
-  }, 3000);
+  }, 3200);
 }
 
 // Resize
 window.addEventListener('resize', () => {
-  const wrapper = document.querySelector('.canvas-wrapper');
-  const width = wrapper.clientWidth;
-  const height = wrapper.clientHeight;
+  const viewport = document.getElementById('viewport');
+  const width = viewport.clientWidth;
+  const height = viewport.clientHeight;
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   renderer.setSize(width, height);
+  composer.setSize(width, height);
 });
 
 // Animation
 function animate() {
   animationId = requestAnimationFrame(animate);
   controls.update();
-  renderer.render(scene, camera);
+  composer.render();
 }
 
 // Start
-function start() {
-  const wrapper = document.querySelector('.canvas-wrapper');
-  renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
-  camera.aspect = wrapper.clientWidth / wrapper.clientHeight;
-  camera.updateProjectionMatrix();
-
-  setModel(createDefaultModel());
-  loaderEl.classList.add('hidden');
-  animate();
-}
-
-window.addEventListener('load', start);
-if (document.readyState === 'complete') start();
+init();
