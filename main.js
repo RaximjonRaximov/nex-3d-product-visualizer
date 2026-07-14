@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js';
+import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
@@ -52,13 +58,14 @@ function init() {
   camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
   camera.position.set(3.2, 2.0, 4.5);
 
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   // Environment
   const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -280,11 +287,62 @@ function createDefaultModel() {
 }
 
 function upgradeToPhysical(material) {
-  if (material instanceof THREE.MeshPhysicalMaterial) return material;
-  const physical = new THREE.MeshPhysicalMaterial();
-  physical.copy(material);
-  physical.name = material.name || 'Nomsiz material';
+  if (material instanceof THREE.MeshPhysicalMaterial) {
+    material.name = material.name || 'Nomsiz material';
+    fixMaterialTextures(material);
+    return material;
+  }
+
+  const physical = new THREE.MeshPhysicalMaterial({ name: material.name || 'Nomsiz material' });
+
+  // Safe property copy for any MeshMaterial
+  const copyProps = [
+    'map', 'normalMap', 'bumpMap', 'bumpScale', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap', 'lightMap',
+    'displacementMap', 'displacementScale', 'displacementBias',
+    'opacity', 'transparent', 'side', 'visible', 'userData'
+  ];
+  copyProps.forEach(prop => {
+    if (material[prop] !== undefined) physical[prop] = material[prop];
+  });
+
+  if (material.color) {
+    physical.color = material.color.clone();
+    // Avoid white-on-white default materials from OBJ/FBX without textures
+    if (
+      physical.color.getHex() === 0xffffff &&
+      !physical.map &&
+      (material instanceof THREE.MeshPhongMaterial || material instanceof THREE.MeshLambertMaterial || material instanceof THREE.MeshBasicMaterial)
+    ) {
+      physical.color.set(0x475569);
+    }
+  }
+  if (material.emissive) physical.emissive = material.emissive.clone();
+
+  if (material.normalScale && material.normalScale.clone) {
+    physical.normalScale = material.normalScale.clone();
+  } else {
+    physical.normalScale = new THREE.Vector2(1, 1);
+  }
+
+  physical.roughness = typeof material.roughness === 'number' ? material.roughness : 0.5;
+  physical.metalness = typeof material.metalness === 'number' ? material.metalness : 0.1;
+
+  // Transparency / transmission hints
+  if (material.transmission !== undefined) physical.transmission = material.transmission;
+  if (material.clearcoat !== undefined) physical.clearcoat = material.clearcoat;
+
+  fixMaterialTextures(physical);
   return physical;
+}
+
+function fixMaterialTextures(material) {
+  const srgbMaps = ['map', 'emissiveMap'];
+  srgbMaps.forEach(key => {
+    if (material[key] && material[key].isTexture) {
+      material[key].colorSpace = THREE.SRGBColorSpace;
+      material[key].needsUpdate = true;
+    }
+  });
 }
 
 function setModel(model) {
@@ -301,7 +359,7 @@ function setModel(model) {
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
-  const scale = 2.2 / maxDim;
+  const scale = maxDim ? 2.2 / maxDim : 1;
   model.scale.setScalar(scale);
   model.position.sub(center.clone().multiplyScalar(scale));
   model.position.y += 0.1;
@@ -443,59 +501,91 @@ function buildMaterialList() {
       createRangeControl('Ustki yorqinlik', 0, 1, 0.01, material.clearcoat || 0, (v) => { material.clearcoat = v; material.needsUpdate = true; })
     ));
 
-    const textureRow = document.createElement('div');
-    textureRow.className = 'texture-row';
+    const textureMaps = [
+      { key: 'map', label: 'Albedo', srgb: true },
+      { key: 'normalMap', label: 'Normal' },
+      { key: 'roughnessMap', label: 'Roughness' },
+      { key: 'metalnessMap', label: 'Metalness' },
+      { key: 'aoMap', label: 'AO' },
+      { key: 'emissiveMap', label: 'Emissive', srgb: true },
+      { key: 'alphaMap', label: 'Alpha' }
+    ];
 
-    const textureInput = document.createElement('input');
-    textureInput.type = 'file';
-    textureInput.accept = 'image/*';
-    textureInput.id = `texture-${index}`;
+    const textureMapsEl = document.createElement('div');
+    textureMapsEl.className = 'texture-maps';
 
-    const textureLabel = document.createElement('label');
-    textureLabel.className = 'texture-label';
-    textureLabel.htmlFor = textureInput.id;
-    textureLabel.textContent = material.map ? 'Tekstura yuklangan' : 'Tekstura yuklash';
+    textureMaps.forEach(({ key, label, srgb }) => {
+      const textureRow = document.createElement('div');
+      textureRow.className = 'texture-row';
 
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'texture-remove';
-    removeBtn.textContent = 'O‘chirish';
-    if (material.map) removeBtn.classList.add('visible');
-    removeBtn.setAttribute('aria-label', 'Teksturani olib tashlash');
+      const keyLabel = document.createElement('span');
+      keyLabel.className = 'texture-key';
+      keyLabel.textContent = label;
 
-    textureInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const url = URL.createObjectURL(file);
-      new THREE.TextureLoader().load(url, (texture) => {
-        texture.colorSpace = THREE.SRGBColorSpace;
-        if (material.map) material.map.dispose();
-        material.map = texture;
-        material.needsUpdate = true;
-        textureLabel.textContent = file.name;
-        removeBtn.classList.add('visible');
-        toast('Tekstura qo‘llandi', 'success');
-      }, undefined, () => {
-        toast('Tekstura yuklanmadi', 'error');
+      const textureInput = document.createElement('input');
+      textureInput.type = 'file';
+      textureInput.accept = 'image/*';
+      textureInput.id = `texture-${index}-${key}`;
+
+      const hasTexture = !!material[key];
+      const textureLabel = document.createElement('label');
+      textureLabel.className = 'texture-label';
+      textureLabel.htmlFor = textureInput.id;
+      textureLabel.textContent = hasTexture ? (material[key].name || 'Yuklangan') : 'Yuklash';
+      if (hasTexture) textureLabel.title = material[key].name || '';
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'texture-remove';
+      removeBtn.textContent = 'X';
+      if (hasTexture) removeBtn.classList.add('visible');
+      removeBtn.setAttribute('aria-label', `${label} teksturani olib tashlash`);
+
+      textureInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        new THREE.TextureLoader().load(url, (texture) => {
+          texture.name = file.name;
+          if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
+          else texture.colorSpace = THREE.LinearSRGBColorSpace;
+          if (key === 'normalMap' || key === 'alphaMap') {
+            texture.colorSpace = THREE.NoColorSpace;
+          }
+          texture.needsUpdate = true;
+          if (material[key]) material[key].dispose();
+          material[key] = texture;
+          material.needsUpdate = true;
+          textureLabel.textContent = file.name;
+          textureLabel.title = file.name;
+          removeBtn.classList.add('visible');
+          toast(`${label} tekstura qo‘llandi`, 'success');
+        }, undefined, () => {
+          toast(`${label} tekstura yuklanmadi`, 'error');
+        });
       });
+
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (material[key]) {
+          material[key].dispose();
+          material[key] = null;
+          material.needsUpdate = true;
+        }
+        textureInput.value = '';
+        textureLabel.textContent = 'Yuklash';
+        textureLabel.title = '';
+        removeBtn.classList.remove('visible');
+        toast(`${label} tekstura olib tashlandi`, 'info');
+      });
+
+      textureRow.appendChild(keyLabel);
+      textureRow.appendChild(textureInput);
+      textureRow.appendChild(textureLabel);
+      textureRow.appendChild(removeBtn);
+      textureMapsEl.appendChild(textureRow);
     });
 
-    removeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (material.map) {
-        material.map.dispose();
-        material.map = null;
-        material.needsUpdate = true;
-      }
-      textureInput.value = '';
-      textureLabel.textContent = 'Tekstura yuklash';
-      removeBtn.classList.remove('visible');
-      toast('Tekstura olib tashlandi', 'info');
-    });
-
-    textureRow.appendChild(textureInput);
-    textureRow.appendChild(textureLabel);
-    textureRow.appendChild(removeBtn);
-    controls.appendChild(textureRow);
+    controls.appendChild(textureMapsEl);
 
     card.appendChild(controls);
     materialList.appendChild(card);
@@ -595,20 +685,109 @@ function applyQuickPreset(name) {
 
 // File loading
 const gltfLoader = new GLTFLoader();
+const objLoader = new OBJLoader();
+const fbxLoader = new FBXLoader();
+const stlLoader = new STLLoader();
+const plyLoader = new PLYLoader();
+const daeLoader = new ColladaLoader();
+const threeMFLoader = new ThreeMFLoader();
+
+const formatNames = {
+  glb: 'GLB',
+  gltf: 'GLTF',
+  obj: 'OBJ',
+  fbx: 'FBX',
+  stl: 'STL',
+  ply: 'PLY',
+  dae: 'DAE',
+  '3mf': '3MF'
+};
+
+function getExt(filename) {
+  return filename.split('.').pop().toLowerCase();
+}
+
+function unsupportedFormat(file) {
+  const ext = getExt(file.name);
+  loaderEl.classList.add('hidden');
+  toast(`${ext.toUpperCase()} formati brauzerda qo‘llab-quvvatlanmaydi. Faylni GLB yoki FBX ga aylantiring.`, 'error');
+}
+
+function createModelGroup(root, format) {
+  const group = new THREE.Group();
+  group.name = fileNameWithoutExt(file.name) || '3D model';
+  group.userData.format = format;
+
+  if (root.isObject3D) {
+    root.traverse(child => {
+      if (child.isMesh || child.isLine || child.isPoints) {
+        group.add(child.clone());
+      }
+    });
+  }
+  return group;
+}
+
+function fileNameWithoutExt(name) {
+  const parts = name.split('.');
+  parts.pop();
+  return parts.join('.');
+}
+
+function geometryToGroup(geometry, format) {
+  const material = new THREE.MeshPhysicalMaterial({
+    color: 0x475569,
+    roughness: 0.5,
+    metalness: 0.1,
+    name: format.toUpperCase() + ' material'
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  const group = new THREE.Group();
+  group.name = fileNameWithoutExt(file.name) || '3D model';
+  group.userData.format = format;
+  group.add(mesh);
+  return group;
+}
 
 function loadFile(file) {
+  const ext = getExt(file.name);
   const url = URL.createObjectURL(file);
   loaderEl.classList.remove('hidden');
 
-  gltfLoader.load(url, (gltf) => {
-    URL.revokeObjectURL(url);
-    setModel(gltf.scene);
-    loaderEl.classList.add('hidden');
-  }, undefined, (err) => {
+  const onError = (err) => {
     URL.revokeObjectURL(url);
     loaderEl.classList.add('hidden');
-    toast('Faylni yuklab bo‘lmadi: ' + (err.message || 'Noto‘g‘ri format'), 'error');
-  });
+    console.error('loadFile error', err);
+    toast('Faylni yuklab bo‘lmadi: ' + (err?.message || 'Noto‘g‘ri format'), 'error');
+  };
+
+  const onDone = (group) => {
+    URL.revokeObjectURL(url);
+    setModel(group);
+    loaderEl.classList.add('hidden');
+    toast(`${formatNames[ext] || ext.toUpperCase()} model yuklandi`, 'success');
+  };
+
+  if (ext === 'glb' || ext === 'gltf') {
+    gltfLoader.load(url, (gltf) => onDone(gltf.scene), undefined, onError);
+  } else if (ext === 'obj') {
+    objLoader.load(url, (obj) => onDone(obj), undefined, onError);
+  } else if (ext === 'fbx') {
+    fbxLoader.load(url, (fbx) => onDone(fbx), undefined, onError);
+  } else if (ext === 'stl') {
+    stlLoader.load(url, (geometry) => onDone(geometryToGroup(geometry, 'stl')), undefined, onError);
+  } else if (ext === 'ply') {
+    plyLoader.load(url, (geometry) => onDone(geometryToGroup(geometry, 'ply')), undefined, onError);
+  } else if (ext === 'dae') {
+    daeLoader.load(url, (collada) => onDone(collada.scene), undefined, onError);
+  } else if (ext === '3mf') {
+    threeMFLoader.load(url, (obj) => onDone(obj), undefined, onError);
+  } else {
+    URL.revokeObjectURL(url);
+    unsupportedFormat(file);
+  }
 }
 
 // UI events

@@ -786,20 +786,36 @@ body {
   background: none;
 }
 
+.texture-maps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
 .texture-row {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
-  margin-top: 0.5rem;
 }
 
 .texture-row input[type="file"] {
   display: none;
 }
 
+.texture-key {
+  width: 70px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
 .texture-label {
   flex: 1;
   padding: 0.5rem 0.75rem;
-  background: var(--surface-3);
+  background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-size: 0.75rem;
@@ -808,16 +824,23 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.texture-label:hover {
+  background: var(--surface-3);
+  border-color: var(--accent);
 }
 
 .texture-remove {
-  padding: 0.5rem;
+  padding: 0.5rem 0.6rem;
   background: rgba(239, 68, 68, 0.1);
   color: var(--danger);
   border: none;
   border-radius: var(--radius);
   cursor: pointer;
   font-size: 0.7rem;
+  font-weight: 600;
   display: none;
 }
 

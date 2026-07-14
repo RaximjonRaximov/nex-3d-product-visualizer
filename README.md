@@ -1,12 +1,12 @@
 # NEX — Professional 3D mahsulot vizualizatori
 
-To‘liq professional darajadagi 3D product configurator. GLB/GLTF fayllarini yuklang, materiallarni sozlang, skrinshot oling va brend mahsulotlaringizni realistik 3D ko‘rinishda taqdim eting.
+To‘liq professional darajadagi 3D product configurator. GLB, GLTF, OBJ, FBX, STL, PLY, DAE va 3MF fayllarini yuklang, har bir materialning albedo, normal, roughness, metalness, AO, emissive va alpha xaritalarini boshqaring, skrinshot oling va brend mahsulotlaringizni realistik 3D ko‘rinishda taqdim eting.
 
 ## Imkoniyatlar
 
-- GLB va GLTF fayllarini drag & drop yoki tanlash orqali yuklash
+- GLB, GLTF, OBJ, FBX, STL, PLY, DAE va 3MF fayllarini drag & drop yoki tanlash orqali yuklash
 - Har bir material uchun rang, metallik, qoplama, shaffoflik, shisha effekti va ustki yorqinlikni sozlash
-- Tekstura yuklash va olib tashlash
+- Har bir materialga albedo, normal, roughness, metalness, AO, emissive va alpha xaritalarini alohida yuklash va olib tashlash
 - Tez material presetlar: Plastik, Metal, Shisha, Mato, Karbon
 - 4 xil yoritgich presetsi: Studio, Issiq, Sovuq, Tun
 - Bloom post-processing effekti (yoqish/o‘chirish)
@@ -23,13 +23,13 @@ To‘liq professional darajadagi 3D product configurator. GLB/GLTF fayllarini yu
 - Three.js `RoomEnvironment` + `PMREMGenerator` orqali realistik refleksiyalar
 - `RectAreaLight` yordamida studiya yoritgichlari
 - `EffectComposer` va `UnrealBloomPass` bilan post-processing
-- `GLTFLoader` orqali 3D modellarni import qilish
-- `MeshPhysicalMaterial` asosida keng qamrovli material sozlamalari
+- `GLTFLoader`, `OBJLoader`, `FBXLoader`, `STLLoader`, `PLYLoader`, `ColladaLoader`, `ThreeMFLoader` orqali 3D modellarni import qilish
+- `MeshPhysicalMaterial` asosida keng qamrovli material sozlamalari va xavfsiz material konversiyasi
 
 ## Texnologiyalar
 
 - Three.js r160 (WebGL 2)
-- GLTFLoader, OrbitControls, RoomEnvironment
+- GLTFLoader, OBJLoader, FBXLoader, STLLoader, PLYLoader, ColladaLoader, ThreeMFLoader, OrbitControls, RoomEnvironment
 - RectAreaLightUniformsLib
 - EffectComposer, RenderPass, UnrealBloomPass
 - Vanilla JavaScript (ES modules)
@@ -51,7 +51,7 @@ Brauzerda oching: http://localhost:8081
 2. Chapdagi paneldan materialni tanlab rang va xususiyatlarini o‘zgartiring.
 3. "Tez presetlar" dan foydalanib, materialni bir zumda o‘zgartiring.
 4. "Studiya sozlamalari" dan yoritgich va bloom effektini boshqaring.
-5. O‘z GLB/GLTF faylingizni yuklang va uni tahrirlang.
+5. O‘z GLB, GLTF, OBJ, FBX, STL, PLY, DAE yoki 3MF faylingizni yuklang va uni tahrirlang.
 6. "Skrinshot" tugmasi bilan joriy ko‘rinishni yuklab oling.
 
 ## SEO va qo‘shimcha
